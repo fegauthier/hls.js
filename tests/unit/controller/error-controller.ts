@@ -7,9 +7,9 @@ import type {
   LevelSwitchingData,
 } from '../../../src/types/events';
 
-import * as sinon from 'sinon';
-import * as chai from 'chai';
-import * as sinonChai from 'sinon-chai';
+import sinon from 'sinon';
+import chai from 'chai';
+import sinonChai from 'sinon-chai';
 import { multivariantPlaylistWithRedundantFallbacks } from './level-controller';
 
 chai.use(sinonChai);
@@ -203,8 +203,10 @@ describe('ErrorController Integration Tests', function () {
             )
           )
         );
-        timers.tick(hls.config.playlistLoadPolicy.default.maxLoadTimeMs);
-        timers.tick(hls.config.playlistLoadPolicy.default.maxLoadTimeMs);
+        // tick 3 times to trigger 2 retries and then an error
+        timers.tick(hls.config.manifestLoadPolicy.default.maxLoadTimeMs + 1);
+        timers.tick(hls.config.manifestLoadPolicy.default.maxLoadTimeMs + 1);
+        timers.tick(hls.config.manifestLoadPolicy.default.maxLoadTimeMs);
       }).then(
         expectFatalErrorEventToStopPlayer(
           hls,
@@ -721,9 +723,9 @@ segment.mp4
       })
         .then((data: LevelSwitchingData) => {
           expect(
-            errors.length,
+            errors,
             'fragment errors after yeilding to first error event'
-          ).to.equal(2);
+          ).to.have.lengthOf(2);
           expect(hls.levels[0].uri).to.equal('http://www.bar.com/tier6.m3u8');
           return new Promise((resolve, reject) => {
             hls.on(Events.LEVEL_SWITCHING, (event, data) => {
@@ -735,9 +737,9 @@ segment.mp4
         })
         .then((data: LevelSwitchingData) => {
           expect(
-            errors.length,
+            errors,
             'fragment errors after yeilding to second error event'
-          ).to.equal(4);
+          ).to.have.lengthOf(12);
           expect(hls.levels[0].uri).to.equal('http://www.baz.com/tier6.m3u8');
           return new Promise((resolve, reject) => {
             hls.on(Events.FRAG_LOADED, (event, data) => {
@@ -831,9 +833,9 @@ segment.mp4
       })
         .then((data: LevelSwitchingData) => {
           expect(
-            errors.length,
+            errors,
             'fragment errors after yeilding to first error event'
-          ).to.equal(2);
+          ).to.have.lengthOf(2);
           expect(hls.levels[0].uri).to.equal('http://www.bar.com/tier6.m3u8');
           return new Promise((resolve, reject) => {
             hls.on(Events.LEVEL_SWITCHING, (event, data) => {
@@ -845,9 +847,9 @@ segment.mp4
         })
         .then((data: LevelSwitchingData) => {
           expect(
-            errors.length,
+            errors,
             'fragment errors after yeilding to second error event'
-          ).to.equal(4);
+          ).to.have.lengthOf(12);
           expect(hls.levels[0].uri).to.equal('http://www.baz.com/tier6.m3u8');
           return new Promise((resolve, reject) => {
             hls.on(Events.FRAG_LOADED, (event, data) => {

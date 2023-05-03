@@ -69,6 +69,10 @@ export default class FragmentLoader {
       if (this.loader) {
         this.loader.destroy();
       }
+      if (frag.gap) {
+        reject(createGapLoadError(frag));
+        return;
+      }
       const loader =
         (this.loader =
         frag.loader =
@@ -183,6 +187,10 @@ export default class FragmentLoader {
     return new Promise((resolve, reject) => {
       if (this.loader) {
         this.loader.destroy();
+      }
+      if (frag.gap || part.gap) {
+        reject(createGapLoadError(frag, part));
+        return;
       }
       const loader =
         (this.loader =
@@ -349,6 +357,23 @@ function createLoaderContext(
     loaderContext.rangeEnd = byteRangeEnd;
   }
   return loaderContext;
+}
+
+function createGapLoadError(frag: Fragment, part?: Part): LoadError {
+  const error = new Error(`GAP ${frag.gap ? 'tag' : 'attribute'} found`);
+  const errorData: FragLoadFailResult = {
+    type: ErrorTypes.MEDIA_ERROR,
+    details: ErrorDetails.FRAG_GAP,
+    fatal: false,
+    frag,
+    error,
+    networkDetails: null,
+  };
+  if (part) {
+    errorData.part = part;
+  }
+  (part ? part : frag).stats.aborted = true;
+  return new LoadError(errorData);
 }
 
 export class LoadError extends Error {

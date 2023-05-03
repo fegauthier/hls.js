@@ -245,6 +245,7 @@ export type TSDemuxerConfig = {
 export type HlsConfig = {
   debug: boolean | ILogger;
   enableWorker: boolean;
+  workerPath: null | string;
   enableSoftwareAES: boolean;
   minAutoBitrate: number;
   ignoreDevicePixelRatio: boolean;
@@ -252,7 +253,7 @@ export type HlsConfig = {
   fLoader?: FragmentLoaderConstructor;
   pLoader?: PlaylistLoaderConstructor;
   fetchSetup?: (context: LoaderContext, initParams: any) => Request;
-  xhrSetup?: (xhr: XMLHttpRequest, url: string) => void;
+  xhrSetup?: (xhr: XMLHttpRequest, url: string) => Promise<void> | void;
 
   // Alt Audio
   audioStreamController?: typeof AudioStreamController;
@@ -334,7 +335,8 @@ export const hlsDefaultConfig: HlsConfig = {
    */
   liveBackBufferLength: null, // used by buffer-controller
   maxMaxBufferLength: 600, // used by stream-controller
-  enableWorker: true, // used by demuxer
+  enableWorker: true, // used by transmuxer
+  workerPath: null, // used by transmuxer
   enableSoftwareAES: true, // used by decrypter
   startLevel: undefined, // used by level-controller
   startFragPrefetch: false, // used by stream-controller
@@ -405,7 +407,7 @@ export const hlsDefaultConfig: HlsConfig = {
   },
   manifestLoadPolicy: {
     default: {
-      maxTimeToFirstByteMs: 10000,
+      maxTimeToFirstByteMs: Infinity,
       maxLoadTimeMs: 20000,
       timeoutRetry: {
         maxNumRetry: 2,

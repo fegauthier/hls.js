@@ -18,9 +18,9 @@ import type {
   NetworkComponentAPI,
 } from '../../../src/types/component-api';
 
-import * as sinon from 'sinon';
-import * as chai from 'chai';
-import * as sinonChai from 'sinon-chai';
+import sinon from 'sinon';
+import chai from 'chai';
+import sinonChai from 'sinon-chai';
 
 chai.use(sinonChai);
 const expect = chai.expect;
@@ -208,7 +208,7 @@ describe('AudioTrackController', function () {
     });
 
     const newLevelInfo = hls.levels[0];
-    const newGroupId = newLevelInfo.audioGroupIds?.[newLevelInfo.urlId];
+    const newGroupId = newLevelInfo.audioGroupId;
 
     audioTrackController.tracks = tracks;
     // Update the level to set audioGroupId
@@ -325,7 +325,7 @@ describe('AudioTrackController', function () {
       };
 
       const newLevelInfo = hls.levels[levelLoadedEvent.level];
-      const newGroupId = newLevelInfo.audioGroupIds?.[newLevelInfo.urlId];
+      const newGroupId = newLevelInfo.audioGroupId;
 
       audioTrackController.tracks = tracks;
       audioTrackController.onLevelLoading(Events.LEVEL_LOADING, {

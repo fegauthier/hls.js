@@ -278,7 +278,7 @@ export class BaseSegment {
 //
 // @public (undocumented)
 export class BaseStreamController extends TaskLoop implements NetworkComponentAPI {
-    constructor(hls: Hls, fragmentTracker: FragmentTracker, keyLoader: KeyLoader, logPrefix: string);
+    constructor(hls: Hls, fragmentTracker: FragmentTracker, keyLoader: KeyLoader, logPrefix: string, playlistType: PlaylistLevelType);
     // (undocumented)
     protected afterBufferFlushed(media: Bufferable, bufferType: SourceBufferName, playlistType: PlaylistLevelType): void;
     // (undocumented)
@@ -289,6 +289,8 @@ export class BaseStreamController extends TaskLoop implements NetworkComponentAP
     //
     // (undocumented)
     protected bufferFragmentData(data: RemuxedTrack, frag: Fragment, part: Part | null, chunkMeta: ChunkMetadata): void;
+    // (undocumented)
+    protected clearTrackerIfNeeded(frag: Fragment): void;
     // (undocumented)
     protected config: HlsConfig;
     // Warning: (ae-forgotten-export) The symbol "Decrypter" needs to be exported by the entry point hls.d.ts
@@ -320,6 +322,8 @@ export class BaseStreamController extends TaskLoop implements NetworkComponentAP
     // (undocumented)
     protected fragPrevious: Fragment | null;
     // (undocumented)
+    protected getAppendedFrag(position: number, playlistType?: PlaylistLevelType): Fragment | null;
+    // (undocumented)
     protected getCurrentContext(chunkMeta: ChunkMetadata): {
         frag: Fragment;
         part: Part | null;
@@ -329,6 +333,8 @@ export class BaseStreamController extends TaskLoop implements NetworkComponentAP
     protected getFragmentAtPosition(bufferEnd: number, end: number, levelDetails: LevelDetails): Fragment | null;
     // (undocumented)
     protected getFwdBufferInfo(bufferable: Bufferable | null, type: PlaylistLevelType): BufferInfo | null;
+    // (undocumented)
+    protected getFwdBufferInfoAtPos(bufferable: Bufferable | null, pos: number, type: PlaylistLevelType): BufferInfo | null;
     // (undocumented)
     protected getInitialLiveFragment(levelDetails: LevelDetails, fragments: Array<Fragment>): Fragment | null;
     // (undocumented)
@@ -341,6 +347,7 @@ export class BaseStreamController extends TaskLoop implements NetworkComponentAP
     protected getNextFragment(pos: number, levelDetails: LevelDetails): Fragment | null;
     // (undocumented)
     protected getNextFragments(pos: number, levelDetails: LevelDetails): Fragment[];
+    protected getNextFragmentLoopLoading(frag: Fragment, levelDetails: LevelDetails, bufferInfo: BufferInfo, playlistType: PlaylistLevelType, maxBufLen: number): Fragment | null;
     // (undocumented)
     getNextPart(partList: Part[], frag: Fragment, targetBufferTime: number): number;
     // Warning: (ae-forgotten-export) The symbol "PartsLoadedData" needs to be exported by the entry point hls.d.ts
@@ -357,6 +364,8 @@ export class BaseStreamController extends TaskLoop implements NetworkComponentAP
     //
     // (undocumented)
     protected initPTS: RationalTimestamp[];
+    // (undocumented)
+    protected isLoopLoading(frag: Fragment, targetBufferTime: number): boolean;
     // (undocumented)
     protected keyLoader: KeyLoader;
     // (undocumented)
@@ -394,7 +403,7 @@ export class BaseStreamController extends TaskLoop implements NetworkComponentAP
     // (undocumented)
     protected onManifestLoaded(event: Events.MANIFEST_LOADED, data: ManifestLoadedData): void;
     // (undocumented)
-    protected onMediaAttached(event: Events.MEDIA_ATTACHED, data: MediaAttachingData): void;
+    protected onMediaAttached(event: Events.MEDIA_ATTACHED, data: MediaAttachedData): void;
     // (undocumented)
     protected onMediaDetaching(): void;
     // (undocumented)
@@ -408,9 +417,15 @@ export class BaseStreamController extends TaskLoop implements NetworkComponentAP
     // (undocumented)
     protected onvseeking: EventListener | null;
     // (undocumented)
+    protected playlistType: PlaylistLevelType;
+    // (undocumented)
     protected recoverWorkerError(data: ErrorData): void;
     // (undocumented)
-    protected reduceMaxBufferLength(threshold?: number): boolean;
+    protected reduceLengthAndFlushBuffer(data: ErrorData): boolean;
+    // (undocumented)
+    protected reduceMaxBufferLength(threshold: number): boolean;
+    // (undocumented)
+    protected removeUnbufferedFrags(start?: number): void;
     // (undocumented)
     protected resetFragmentErrors(filterType: PlaylistLevelType): void;
     // (undocumented)
@@ -421,6 +436,8 @@ export class BaseStreamController extends TaskLoop implements NetworkComponentAP
     protected resetStartWhenNotLoaded(level: number): void;
     // (undocumented)
     protected resetTransmuxer(): void;
+    // (undocumented)
+    protected resetWhenMissingContext(chunkMeta: ChunkMetadata): void;
     // (undocumented)
     protected retryDate: number;
     // (undocumented)
@@ -995,6 +1012,8 @@ export enum ErrorDetails {
     // (undocumented)
     FRAG_DECRYPT_ERROR = "fragDecryptError",
     // (undocumented)
+    FRAG_GAP = "fragGap",
+    // (undocumented)
     FRAG_LOAD_ERROR = "fragLoadError",
     // (undocumented)
     FRAG_LOAD_TIMEOUT = "fragLoadTimeOut",
@@ -1357,6 +1376,8 @@ export class Fragment extends BaseSegment {
     // (undocumented)
     endPTS?: number;
     // (undocumented)
+    gap?: boolean;
+    // (undocumented)
     initSegment: Fragment | null;
     // Warning: (ae-forgotten-export) The symbol "KeyLoaderContext" needs to be exported by the entry point hls.d.ts
     //
@@ -1612,6 +1633,7 @@ export interface HlsChunkPerformanceTiming extends HlsPerformanceTiming {
 export type HlsConfig = {
     debug: boolean | ILogger;
     enableWorker: boolean;
+    workerPath: null | string;
     enableSoftwareAES: boolean;
     minAutoBitrate: number;
     ignoreDevicePixelRatio: boolean;
@@ -1621,7 +1643,7 @@ export type HlsConfig = {
     fLoader?: FragmentLoaderConstructor;
     pLoader?: PlaylistLoaderConstructor;
     fetchSetup?: (context: LoaderContext, initParams: any) => Request;
-    xhrSetup?: (xhr: XMLHttpRequest, url: string) => void;
+    xhrSetup?: (xhr: XMLHttpRequest, url: string) => Promise<void> | void;
     audioStreamController?: typeof AudioStreamController;
     audioTrackController?: typeof AudioTrackController;
     subtitleStreamController?: typeof SubtitleStreamController;
@@ -1957,6 +1979,8 @@ export class Level {
     // (undocumented)
     readonly audioCodec: string | undefined;
     // (undocumented)
+    get audioGroupId(): string | undefined;
+    // (undocumented)
     audioGroupIds?: (string | undefined)[];
     // (undocumented)
     readonly bitrate: number;
@@ -1985,6 +2009,8 @@ export class Level {
     get pathwayId(): string;
     // (undocumented)
     realBitrate: number;
+    // (undocumented)
+    get textGroupId(): string | undefined;
     // (undocumented)
     textGroupIds?: (string | undefined)[];
     // (undocumented)
@@ -2951,6 +2977,8 @@ export class SubtitleStreamController extends BaseStreamController implements Ne
     onLevelLoaded(event: Events.LEVEL_LOADED, data: LevelLoadedData): void;
     // (undocumented)
     onManifestLoading(): void;
+    // (undocumented)
+    onMediaDetaching(): void;
     // Warning: (ae-forgotten-export) The symbol "SubtitleFragProcessed" needs to be exported by the entry point hls.d.ts
     //
     // (undocumented)

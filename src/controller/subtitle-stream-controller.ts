@@ -7,6 +7,7 @@ import { FragmentState } from './fragment-tracker';
 import BaseStreamController, { State } from './base-stream-controller';
 import { PlaylistLevelType } from '../types/loader';
 import { Level } from '../types/level';
+import { subtitleOptionsIdentical } from '../utils/media-option-attributes';
 import { ErrorDetails, ErrorTypes } from '../errors';
 import type { NetworkComponentAPI } from '../types/component-api';
 import type Hls from '../hls';
@@ -48,7 +49,13 @@ export class SubtitleStreamController
     fragmentTracker: FragmentTracker,
     keyLoader: KeyLoader
   ) {
-    super(hls, fragmentTracker, keyLoader, '[subtitle-stream-controller]');
+    super(
+      hls,
+      fragmentTracker,
+      keyLoader,
+      '[subtitle-stream-controller]',
+      PlaylistLevelType.SUBTITLE
+    );
     this._registerListeners();
   }
 
@@ -104,6 +111,11 @@ export class SubtitleStreamController
   onManifestLoading() {
     this.mainDetails = null;
     this.fragmentTracker.removeAllFragments();
+  }
+
+  onMediaDetaching(): void {
+    this.tracksBuffered = [];
+    super.onMediaDetaching();
   }
 
   onLevelLoaded(event: Events.LEVEL_LOADED, data: LevelLoadedData) {
@@ -216,15 +228,24 @@ export class SubtitleStreamController
     event: Events.SUBTITLE_TRACKS_UPDATED,
     { subtitleTracks }: SubtitleTracksUpdatedData
   ) {
+    if (subtitleOptionsIdentical(this.levels, subtitleTracks)) {
+      this.levels = subtitleTracks.map(
+        (mediaPlaylist) => new Level(mediaPlaylist)
+      );
+      return;
+    }
     this.tracksBuffered = [];
-    this.levels = subtitleTracks.map(
-      (mediaPlaylist) => new Level(mediaPlaylist)
-    );
-    this.fragmentTracker.removeAllFragments();
-    this.fragPrevious = null;
-    this.levels.forEach((level: Level) => {
+    this.levels = subtitleTracks.map((mediaPlaylist) => {
+      const level = new Level(mediaPlaylist);
       this.tracksBuffered[level.id] = [];
+      return level;
     });
+    this.fragmentTracker.removeFragmentsInRange(
+      0,
+      Number.POSITIVE_INFINITY,
+      PlaylistLevelType.SUBTITLE
+    );
+    this.fragPrevious = null;
     this.mediaBuffer = null;
   }
 

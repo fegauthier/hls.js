@@ -168,11 +168,12 @@ class PassThroughRemuxer implements Remuxer {
     }
 
     const startDTS = getStartDTS(initData, data);
+    const decodeTime = startDTS === null ? timeOffset : startDTS;
     if (
-      isInvalidInitPts(initPTS, startDTS, timeOffset) ||
+      isInvalidInitPts(initPTS, decodeTime, timeOffset) ||
       (initSegment.timescale !== initPTS.timescale && accurateTimeOffset)
     ) {
-      initSegment.initPTS = startDTS - timeOffset;
+      initSegment.initPTS = decodeTime - timeOffset;
       this.initPTS = initPTS = {
         baseTime: initSegment.initPTS,
         timescale: 1,
@@ -181,7 +182,7 @@ class PassThroughRemuxer implements Remuxer {
 
     const duration = getDuration(data, initData);
     const startTime = audioTrack
-      ? startDTS - initPTS.baseTime / initPTS.timescale
+      ? decodeTime - initPTS.baseTime / initPTS.timescale
       : (lastEndTime as number);
     const endTime = startTime + duration;
     offsetStartDTS(initData, data, initPTS.baseTime / initPTS.timescale);
@@ -265,7 +266,7 @@ function getParsedTrackCodec(
   // Provide defaults based on codec type
   // This allows for some playback of some fmp4 playlists without CODECS defined in manifest
   if (parsedCodec === 'hvc1' || parsedCodec === 'hev1') {
-    return 'hvc1.1.c.L120.90';
+    return 'hvc1.1.6.L120.90';
   }
   if (parsedCodec === 'av01') {
     return 'av01.0.04M.08';

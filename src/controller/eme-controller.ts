@@ -24,7 +24,7 @@ import { base64Decode } from '../utils/numeric-encoding-utils';
 import { DecryptData, LevelKey } from '../loader/level-key';
 import Hex from '../utils/hex';
 import { bin2str, parsePssh, parseSinf } from '../utils/mp4-tools';
-import EventEmitter from 'eventemitter3';
+import { EventEmitter } from 'eventemitter3';
 import type Hls from '../hls';
 import type { ComponentAPI } from '../types/component-api';
 import type {
@@ -123,12 +123,14 @@ class EMEController implements ComponentAPI {
   private registerListeners() {
     this.hls.on(Events.MEDIA_ATTACHED, this.onMediaAttached, this);
     this.hls.on(Events.MEDIA_DETACHED, this.onMediaDetached, this);
+    this.hls.on(Events.MANIFEST_LOADING, this.onManifestLoading, this);
     this.hls.on(Events.MANIFEST_LOADED, this.onManifestLoaded, this);
   }
 
   private unregisterListeners() {
     this.hls.off(Events.MEDIA_ATTACHED, this.onMediaAttached, this);
     this.hls.off(Events.MEDIA_DETACHED, this.onMediaDetached, this);
+    this.hls.off(Events.MANIFEST_LOADING, this.onManifestLoading, this);
     this.hls.off(Events.MANIFEST_LOADED, this.onManifestLoaded, this);
   }
 
@@ -1179,6 +1181,10 @@ class EMEController implements ComponentAPI {
           `Could not close sessions and clear media keys: ${error}. media.src: ${media?.src}`
         );
       });
+  }
+
+  private onManifestLoading() {
+    this.keyFormatPromise = null;
   }
 
   private onManifestLoaded(
