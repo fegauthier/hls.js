@@ -253,7 +253,10 @@ export type HlsConfig = {
   fLoader?: FragmentLoaderConstructor;
   pLoader?: PlaylistLoaderConstructor;
   fetchSetup?: (context: LoaderContext, initParams: any) => Request;
-  xhrSetup?: (xhr: XMLHttpRequest, url: string) => Promise<void> | void;
+  xhrSetup?: (
+    xhr: XMLHttpRequest,
+    url: string
+  ) => Promise<{ data: any; url: any } | null>;
 
   // Alt Audio
   audioStreamController?: typeof AudioStreamController;

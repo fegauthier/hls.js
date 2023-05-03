@@ -14,9 +14,10 @@ import { getRetryDelay, shouldRetry } from './error-helper';
 const AGE_HEADER_LINE_REGEX = /^age:\s*[\d.]+\s*$/im;
 
 class XhrLoader implements Loader<LoaderContext> {
-  private xhrSetup:
-    | ((xhr: XMLHttpRequest, url: string) => Promise<void> | void)
-    | null;
+  private xhrSetup: (
+    xhr: XMLHttpRequest,
+    url: string
+  ) => Promise<{ data: any; url: any } | null>;
   private requestTimeout?: number;
   private retryTimeout?: number;
   private retryDelay: number;
@@ -28,7 +29,9 @@ class XhrLoader implements Loader<LoaderContext> {
   public stats: LoaderStats;
 
   constructor(config: HlsConfig) {
-    this.xhrSetup = config ? config.xhrSetup || null : null;
+    this.xhrSetup = config
+      ? config.xhrSetup || (() => Promise.resolve(null))
+      : () => Promise.resolve(null);
     this.stats = new LoadStats();
     this.retryDelay = 0;
   }
