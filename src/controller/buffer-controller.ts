@@ -2,6 +2,7 @@ import { Events } from '../events';
 import { logger } from '../utils/logger';
 import { ErrorDetails, ErrorTypes } from '../errors';
 import { BufferHelper } from '../utils/buffer-helper';
+import { getCodecCompatibleName } from '../utils/codecs';
 import { getMediaSource } from '../utils/mediasource-helper';
 import { ElementaryStreamTypes } from '../loader/fragment';
 import type { TrackSet } from '../types/track';
@@ -268,7 +269,11 @@ export default class BufferController implements ComponentAPI {
             '$1'
           );
           if (currentCodec !== nextCodec) {
-            const mimeType = `${container};codecs=${levelCodec || codec}`;
+            let trackCodec = levelCodec || codec;
+            if (trackName.slice(0, 5) === 'audio') {
+              trackCodec = getCodecCompatibleName(trackCodec);
+            }
+            const mimeType = `${container};codecs=${trackCodec}`;
             this.appendChangeType(trackName, mimeType);
             logger.log(
               `[buffer-controller]: switching codec ${currentCodec} to ${nextCodec}`
@@ -326,7 +331,7 @@ export default class BufferController implements ComponentAPI {
       },
     };
 
-    operationQueue.append(operation, type);
+    operationQueue.append(operation, type, !!this.pendingTracks[type]);
   }
 
   protected onBufferAppending(
@@ -412,10 +417,6 @@ export default class BufferController implements ComponentAPI {
       },
       onError: (err) => {
         // in case any error occured while appending, put back segment in segments table
-        logger.error(
-          `[buffer-controller]: Error encountered while trying to append to the ${type} SourceBuffer`,
-          err
-        );
         const event = {
           type: ErrorTypes.MEDIA_ERROR,
           parent: frag.type,
@@ -448,7 +449,7 @@ export default class BufferController implements ComponentAPI {
         hls.trigger(Events.ERROR, event);
       },
     };
-    operationQueue.append(operation, type);
+    operationQueue.append(operation, type, !!this.pendingTracks[type]);
   }
 
   protected onBufferFlushing(
@@ -760,7 +761,12 @@ export default class BufferController implements ComponentAPI {
           );
         }
         // use levelCodec as first priority
-        const codec = track.levelCodec || track.codec;
+        let codec = track.levelCodec || track.codec;
+        if (codec) {
+          if (trackName.slice(0, 5) === 'audio') {
+            codec = getCodecCompatibleName(codec);
+          }
+        }
         const mimeType = `${track.container};codecs=${codec}`;
         logger.log(`[buffer-controller]: creating sourceBuffer(${mimeType})`);
         try {
@@ -896,13 +902,13 @@ export default class BufferController implements ComponentAPI {
 
   // This method must result in an updateend event; if append is not called, _onSBUpdateEnd must be called manually
   private appendExecutor(data: Uint8Array, type: SourceBufferName) {
-    const { operationQueue, sourceBuffer } = this;
-    const sb = sourceBuffer[type];
+    const sb = this.sourceBuffer[type];
     if (!sb) {
-      logger.warn(
-        `[buffer-controller]: Attempting to append to the ${type} SourceBuffer, but it does not exist`
-      );
-      operationQueue.shiftAndExecuteNext(type);
+      if (!this.pendingTracks[type]) {
+        throw new Error(
+          `Attempting to append to the ${type} SourceBuffer, but it does not exist`
+        );
+      }
       return;
     }
 

@@ -16,7 +16,7 @@ import {
 import { Level } from '../types/level';
 import { Events } from '../events';
 import { ErrorTypes, ErrorDetails } from '../errors';
-import { isCodecSupportedInMp4 } from '../utils/codecs';
+import { isCodecSupportedInMp4, getCodecCompatibleName } from '../utils/codecs';
 import BasePlaylistController from './base-playlist-controller';
 import { PlaylistContextType, PlaylistLevelType } from '../types/loader';
 import type Hls from '../hls';
@@ -75,7 +75,7 @@ export default class LevelController extends BasePlaylistController {
     super.destroy();
   }
 
-  public startLoad(): void {
+  public stopLoad(): void {
     const levels = this._levels;
 
     // clean up live level details to force reload them, and reset load errors
@@ -84,7 +84,7 @@ export default class LevelController extends BasePlaylistController {
       level.fragmentError = 0;
     });
 
-    super.startLoad();
+    super.stopLoad();
   }
 
   private resetLevels() {
@@ -121,6 +121,10 @@ export default class LevelController extends BasePlaylistController {
         if (chromeOrFirefox) {
           levelParsed.audioCodec = undefined;
         }
+      }
+
+      if (levelParsed.audioCodec) {
+        levelParsed.audioCodec = getCodecCompatibleName(levelParsed.audioCodec);
       }
 
       const {

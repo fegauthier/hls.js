@@ -15,6 +15,7 @@ import {
 } from '../utils/mp4-tools';
 import { ElementaryStreamTypes } from '../loader/fragment';
 import { logger } from '../utils/logger';
+import { getCodecCompatibleName } from '../utils/codecs';
 import type { TrackSet } from '../types/track';
 import type {
   InitSegmentData,
@@ -167,20 +168,25 @@ class PassThroughRemuxer implements Remuxer {
       this.emitInitSegment = false;
     }
 
+    const duration = getDuration(data, initData);
     const startDTS = getStartDTS(initData, data);
     const decodeTime = startDTS === null ? timeOffset : startDTS;
     if (
-      isInvalidInitPts(initPTS, decodeTime, timeOffset) ||
+      isInvalidInitPts(initPTS, decodeTime, timeOffset, duration) ||
       (initSegment.timescale !== initPTS.timescale && accurateTimeOffset)
     ) {
       initSegment.initPTS = decodeTime - timeOffset;
+      if (initPTS && initPTS.timescale === 1) {
+        logger.warn(
+          `Adjusting initPTS by ${initSegment.initPTS - initPTS.baseTime}`
+        );
+      }
       this.initPTS = initPTS = {
         baseTime: initSegment.initPTS,
         timescale: 1,
       };
     }
 
-    const duration = getDuration(data, initData);
     const startTime = audioTrack
       ? decodeTime - initPTS.baseTime / initPTS.timescale
       : (lastEndTime as number);
@@ -244,14 +250,16 @@ class PassThroughRemuxer implements Remuxer {
 function isInvalidInitPts(
   initPTS: RationalTimestamp | null,
   startDTS: number,
-  timeOffset: number
+  timeOffset: number,
+  duration: number
 ): initPTS is null {
   if (initPTS === null) {
     return true;
   }
-  // InitPTS is invalid when it would cause start time to be negative, or distance from time offset to be more than 1 second
+  // InitPTS is invalid when distance from program would be more than segment duration or a minimum of one second
+  const minDuration = Math.max(duration, 1);
   const startTime = startDTS - initPTS.baseTime / initPTS.timescale;
-  return startTime < 0 && Math.abs(startTime - timeOffset) > 1;
+  return Math.abs(startTime - timeOffset) > minDuration;
 }
 
 function getParsedTrackCodec(
@@ -262,7 +270,6 @@ function getParsedTrackCodec(
   if (parsedCodec && parsedCodec.length > 4) {
     return parsedCodec;
   }
-  // Since mp4-tools cannot parse full codec string (see 'TODO: Parse codec details'... in mp4-tools)
   // Provide defaults based on codec type
   // This allows for some playback of some fmp4 playlists without CODECS defined in manifest
   if (parsedCodec === 'hvc1' || parsedCodec === 'hev1') {
@@ -273,6 +280,9 @@ function getParsedTrackCodec(
   }
   if (parsedCodec === 'avc1' || type === ElementaryStreamTypes.VIDEO) {
     return 'avc1.42e01e';
+  }
+  if (parsedCodec === 'fLaC' || parsedCodec === 'Opus') {
+    return getCodecCompatibleName(parsedCodec);
   }
   return 'mp4a.40.5';
 }

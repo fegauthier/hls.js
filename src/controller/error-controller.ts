@@ -72,6 +72,7 @@ export default class ErrorController implements NetworkComponentAPI {
     const hls = this.hls;
     hls.on(Events.ERROR, this.onError, this);
     hls.on(Events.MANIFEST_LOADING, this.onManifestLoading, this);
+    hls.on(Events.LEVEL_UPDATED, this.onLevelUpdated, this);
   }
 
   private unregisterListeners() {
@@ -82,6 +83,7 @@ export default class ErrorController implements NetworkComponentAPI {
     hls.off(Events.ERROR, this.onError, this);
     hls.off(Events.ERROR, this.onErrorOut, this);
     hls.off(Events.MANIFEST_LOADING, this.onManifestLoading, this);
+    hls.off(Events.LEVEL_UPDATED, this.onLevelUpdated, this);
   }
 
   destroy() {
@@ -91,11 +93,11 @@ export default class ErrorController implements NetworkComponentAPI {
     this.penalizedRenditions = {};
   }
 
-  startLoad(startPosition: number): void {
+  startLoad(startPosition: number): void {}
+
+  stopLoad(): void {
     this.playlistError = 0;
   }
-
-  stopLoad(): void {}
 
   private getVariantLevelIndex(frag: Fragment | undefined): number {
     return frag?.type === PlaylistLevelType.MAIN
@@ -106,6 +108,10 @@ export default class ErrorController implements NetworkComponentAPI {
   private onManifestLoading() {
     this.playlistError = 0;
     this.penalizedRenditions = {};
+  }
+
+  private onLevelUpdated() {
+    this.playlistError = 0;
   }
 
   private onError(event: Events.ERROR, data: ErrorData) {
@@ -204,6 +210,7 @@ export default class ErrorController implements NetworkComponentAPI {
         return;
       case ErrorDetails.BUFFER_ADD_CODEC_ERROR:
       case ErrorDetails.REMUX_ALLOC_ERROR:
+      case ErrorDetails.BUFFER_APPEND_ERROR:
         data.errorAction = this.getLevelSwitchAction(
           data,
           data.level ?? hls.loadLevel
@@ -211,7 +218,6 @@ export default class ErrorController implements NetworkComponentAPI {
         return;
       case ErrorDetails.INTERNAL_EXCEPTION:
       case ErrorDetails.BUFFER_APPENDING_ERROR:
-      case ErrorDetails.BUFFER_APPEND_ERROR:
       case ErrorDetails.BUFFER_FULL_ERROR:
       case ErrorDetails.LEVEL_SWITCH_ERROR:
       case ErrorDetails.BUFFER_STALLED_ERROR:
@@ -255,21 +261,12 @@ export default class ErrorController implements NetworkComponentAPI {
         retryCount,
       };
     }
-    // Do not perform level switch if an error occurred using delivery directives
-    // Allow reload without directives (handled in playlist-loader)
-    if (data.context?.deliveryDirectives) {
-      return {
-        action: NetworkErrorAction.DoNothing,
-        flags: ErrorActionFlags.None,
-        retryConfig: retryConfig || {
-          maxNumRetry: 0,
-          retryDelayMs: 0,
-          maxRetryDelayMs: 0,
-        },
-        retryCount,
-      };
+    const errorAction = this.getLevelSwitchAction(data, levelIndex);
+    if (retryConfig) {
+      errorAction.retryConfig = retryConfig;
+      errorAction.retryCount = retryCount;
     }
-    return this.getLevelSwitchAction(data, levelIndex);
+    return errorAction;
   }
 
   private getFragRetryOrSwitchAction(data: ErrorData): IErrorAction {
@@ -380,6 +377,7 @@ export default class ErrorController implements NetworkComponentAPI {
         }
         if (nextLevel > -1 && hls.loadLevel !== nextLevel) {
           data.levelRetry = true;
+          this.playlistError = 0;
           return {
             action: NetworkErrorAction.SendAlternateToPenaltyBox,
             flags: ErrorActionFlags.None,

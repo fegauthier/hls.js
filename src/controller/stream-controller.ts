@@ -991,8 +991,13 @@ export default class StreamController
           this.state = State.IDLE;
         }
         break;
+      case ErrorDetails.BUFFER_APPEND_ERROR:
       case ErrorDetails.BUFFER_FULL_ERROR:
         if (!data.parent || data.parent !== 'main') {
+          return;
+        }
+        if (data.details === ErrorDetails.BUFFER_APPEND_ERROR) {
+          this.resetLoadingState();
           return;
         }
         if (this.reduceLengthAndFlushBuffer(data)) {
@@ -1323,7 +1328,12 @@ export default class StreamController
         }
       }
       // HE-AAC is broken on Android, always signal audio codec as AAC even if variant manifest states otherwise
-      if (ua.indexOf('android') !== -1 && audio.container !== 'audio/mpeg') {
+      if (
+        audioCodec &&
+        audioCodec.indexOf('mp4a.40.5') !== -1 &&
+        ua.indexOf('android') !== -1 &&
+        audio.container !== 'audio/mpeg'
+      ) {
         // Exclude mpeg audio
         audioCodec = 'mp4a.40.2';
         this.log(`Android: force audio codec to ${audioCodec}`);
@@ -1380,7 +1390,7 @@ export default class StreamController
       }
     });
     // trigger handler right now
-    this.tick();
+    this.tickImmediate();
   }
 
   public getMainFwdBufferInfo(): BufferInfo | null {

@@ -526,7 +526,7 @@ export default class BaseStreamController
         return data;
       })
       .then((data: FragLoadedData) => {
-        const { fragCurrent, hls, levels } = this;
+        const { levels } = this;
         if (!levels) {
           throw new Error('init load aborted, missing levels');
         }
@@ -537,16 +537,6 @@ export default class BaseStreamController
         frag.data = new Uint8Array(data.payload);
         stats.parsing.start = stats.buffering.start = self.performance.now();
         stats.parsing.end = stats.buffering.end = self.performance.now();
-
-        // Silence FRAG_BUFFERED event if fragCurrent is null
-        if (data.frag === fragCurrent) {
-          hls.trigger(Events.FRAG_BUFFERED, {
-            stats,
-            frag: fragCurrent,
-            part: null,
-            id: frag.type,
-          });
-        }
         this.tick();
       })
       .catch((reason) => {
@@ -1586,13 +1576,17 @@ export default class BaseStreamController
       this.resetFragmentErrors(filterType);
       if (retryCount < retryConfig.maxNumRetry) {
         // Network retry is skipped when level switch is preferred
-        if (!gapTagEncountered) {
+        if (
+          !gapTagEncountered &&
+          action !== NetworkErrorAction.RemoveAlternatePermanently
+        ) {
           errorAction.resolved = true;
         }
       } else {
         logger.warn(
           `${data.details} reached or exceeded max retry (${retryCount})`
         );
+        return;
       }
     } else {
       this.state = State.ERROR;

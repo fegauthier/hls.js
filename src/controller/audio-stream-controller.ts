@@ -655,8 +655,12 @@ class AudioStreamController
     const { frag, part } = data;
     if (frag.type !== PlaylistLevelType.AUDIO) {
       if (!this.loadedmetadata && frag.type === PlaylistLevelType.MAIN) {
-        if ((this.videoBuffer || this.media)?.buffered.length) {
-          this.loadedmetadata = true;
+        const bufferable = this.videoBuffer || this.media;
+        if (bufferable) {
+          const bufferedTimeRanges = BufferHelper.getBuffered(bufferable);
+          if (bufferedTimeRanges.length) {
+            this.loadedmetadata = true;
+          }
         }
       }
       return;
@@ -714,8 +718,13 @@ class AudioStreamController
           this.state = State.IDLE;
         }
         break;
+      case ErrorDetails.BUFFER_APPEND_ERROR:
       case ErrorDetails.BUFFER_FULL_ERROR:
         if (!data.parent || data.parent !== 'audio') {
+          return;
+        }
+        if (data.details === ErrorDetails.BUFFER_APPEND_ERROR) {
+          this.resetLoadingState();
           return;
         }
         if (this.reduceLengthAndFlushBuffer(data)) {
@@ -861,7 +870,7 @@ class AudioStreamController
       this.hls.trigger(Events.BUFFER_APPENDING, segment);
     }
     // trigger handler right now
-    this.tick();
+    this.tickImmediate();
   }
 
   protected loadFragment(

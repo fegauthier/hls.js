@@ -33,6 +33,7 @@ import type { HlsConfig } from '../config';
 const MAX_SILENT_FRAME_DURATION = 10 * 1000; // 10 seconds
 const AAC_SAMPLES_PER_FRAME = 1024;
 const MPEG_AUDIO_SAMPLE_PER_FRAME = 1152;
+const AC3_SAMPLES_PER_FRAME = 1536;
 
 let chromeVersion: number | null = null;
 let safariWebkitVersion: number | null = null;
@@ -327,6 +328,10 @@ export default class MP4Remuxer implements Remuxer {
             audioTrack.codec = 'mp3';
           }
           break;
+
+        case 'ac3':
+          audioTrack.codec = 'ac-3';
+          break;
       }
       tracks.audio = {
         id: 'audio',
@@ -497,7 +502,7 @@ export default class MP4Remuxer implements Remuxer {
             });
           }
         }
-        if (!foundOverlap || nextAvcDts > inputSamples[0].pts) {
+        if (!foundOverlap || nextAvcDts >= inputSamples[0].pts) {
           firstDTS = nextAvcDts;
           const firstPTS = inputSamples[0].pts - delta;
           inputSamples[0].dts = firstDTS;
@@ -720,6 +725,17 @@ export default class MP4Remuxer implements Remuxer {
     return data;
   }
 
+  getSamplesPerFrame(track: DemuxedAudioTrack) {
+    switch (track.segmentCodec) {
+      case 'mp3':
+        return MPEG_AUDIO_SAMPLE_PER_FRAME;
+      case 'ac3':
+        return AC3_SAMPLES_PER_FRAME;
+      default:
+        return AAC_SAMPLES_PER_FRAME;
+    }
+  }
+
   remuxAudio(
     track: DemuxedAudioTrack,
     timeOffset: number,
@@ -732,10 +748,7 @@ export default class MP4Remuxer implements Remuxer {
       ? track.samplerate
       : inputTimeScale;
     const scaleFactor: number = inputTimeScale / mp4timeScale;
-    const mp4SampleDuration: number =
-      track.segmentCodec === 'aac'
-        ? AAC_SAMPLES_PER_FRAME
-        : MPEG_AUDIO_SAMPLE_PER_FRAME;
+    const mp4SampleDuration: number = this.getSamplesPerFrame(track);
     const inputSampleDuration: number = mp4SampleDuration * scaleFactor;
     const initPTS = this._initPTS as RationalTimestamp;
     const rawMPEG: boolean =
@@ -1085,12 +1098,12 @@ export function flushTextTrackMetadataCueSamples(
     // using this._initPTS and this._initDTS to calculate relative time
     sample.pts =
       normalizePts(
-        sample.pts - (initPTS.baseTime * 90000) / initPTS.timescale,
+        sample.pts - (initPTS.baseTime * inputTimeScale) / initPTS.timescale,
         timeOffset * inputTimeScale
       ) / inputTimeScale;
     sample.dts =
       normalizePts(
-        sample.dts - (initDTS.baseTime * 90000) / initDTS.timescale,
+        sample.dts - (initDTS.baseTime * inputTimeScale) / initDTS.timescale,
         timeOffset * inputTimeScale
       ) / inputTimeScale;
   }
